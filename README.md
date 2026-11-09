@@ -1,8 +1,8 @@
 <!--
 作者 startgo (startgo@yia.app)
 授權預設 GPLv3
-時間: 2026-11-09 16:50:00 UTC+8
-版本: v1.31.3
+時間: 2026-11-09 17:00:00 UTC+8
+版本: v1.31.4
 -->
 
 # MarkItDown Browser Edition (Pyodide WASM Engine)
@@ -21,14 +21,14 @@
 
 ```mermaid
 flowchart TD
-    A["本機執行腳本<br>Run-Server.ps1"] --> B[".NET 綁定<br>動態連接埠 (Port)"]
-    B --> C["瀏覽器啟動<br>載入 Pyodide WASM"]
-    C --> D{"轉換模式選擇"}
-    D -->|解析匯入| E["pdfminer / BS4<br>markdownify 管線"]
-    D -->|編輯匯出| F["pdf-lib + fontkit<br>思源黑體向量組版"]
-    E --> G["標準 Markdown 文本"]
-    F --> H["雙軌可逆 PDF"]
-    H --> I["向量頁面 + 附件<br>/EmbeddedFiles"]
+    A[執行本機腳本] --> B[.NET 綁定連接埠]
+    B --> C[啟動瀏覽器載入引擎]
+    C --> D{文件轉換模式}
+    D -->|匯入解析| E[Python 轉譯管線]
+    D -->|編輯匯出| F[向量排版引擎]
+    E --> G[輸出標準 Markdown]
+    F --> H[輸出雙軌可逆 PDF]
+    H --> I[包含向量頁面與附件]
 ```
 
 ### 核心規格與技術對照
@@ -90,14 +90,14 @@ It boots via a single PowerShell script utilizing `.NET HttpListener` on an ephe
 
 ```mermaid
 flowchart TD
-    A["Run Script<br>Run-Server.ps1"] --> B[".NET Loopback<br>Dynamic Port"]
-    B --> C["Browser Launches<br>Pyodide WASM Engine"]
-    C --> D{"Select Mode"}
-    D -->|Parse Import| E["pdfminer / BS4<br>markdownify Pipeline"]
-    D -->|Compile Export| F["pdf-lib + fontkit<br>Source Han Sans TC"]
-    E --> G["Standard Markdown"]
-    F --> H["Reversible PDF"]
-    H --> I["Vector Pages +<br>/EmbeddedFiles Attachment"]
+    A[Run Local Script] --> B[.NET Dynamic Port]
+    B --> C[Launch Browser Engine]
+    C --> D{Select Pipeline}
+    D -->|Parse Import| E[Python Parser Core]
+    D -->|Export PDF| F[Vector Layout Core]
+    E --> G[Standard Markdown]
+    F --> H[Reversible PDF]
+    H --> I[Vector Pages & Attachments]
 ```
 
 ### Technical Specifications
@@ -159,14 +159,14 @@ Click **Load i18n Pack** to inject an external translation schema without recomp
 
 ```mermaid
 flowchart TD
-    A["スクリプト実行<br>Run-Server.ps1"] --> B[".NET 内部バインド<br>動的ポート確保"]
-    B --> C["ブラウザ起動<br>Pyodide WASM 読込"]
-    C --> D{"処理選択"}
-    D -->|解析読込| E["pdfminer / BS4<br>markdownify 変換基盤"]
-    D -->|編集出力| F["pdf-lib + fontkit<br>思源黒体ベクター組版"]
-    E --> G["標準 Markdown 抽出"]
-    F --> H["可逆 PDF 出力"]
-    H --> I["ベクター層 +<br>/EmbeddedFiles 添付"]
+    A[ローカル起動実行] --> B[.NET ポート確保]
+    B --> C[ブラウザ基盤起動]
+    C --> D{処理モード選択}
+    D -->|解析読込| E[Python 変換パイプライン]
+    D -->|編集出力| F[ベクター組版エンジン]
+    E --> G[標準 Markdown 抽出]
+    F --> H[可逆 PDF 出力]
+    H --> I[ベクター層と添付ファイル]
 ```
 
 ### 機能・技術仕様比較
