@@ -1,8 +1,8 @@
 ﻿<#
 作者 startgo (startgo@yia.app)
 授權預設 GPLv3
-時間: 2026-11-09 18:30:00 UTC+8
-版本: v1.31.10
+時間: 2026-11-09 20:35:00 UTC+8
+版本: v1.31.17
 #>
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -191,6 +191,7 @@ try {
       width: 100%;
       height: 100%;
       overflow-y: auto;
+      overflow-x: auto;
       padding: 16px 20px;
       background: #0b1329;
       color: #e2e8f0;
@@ -226,20 +227,53 @@ try {
       padding: 2px 4px;
       border-radius: 3px;
       font-size: 0.78rem;
+      color: var(--accent);
     }
+
+    /* GitHub GFM 規範表格排版樣式 */
     .md-preview-pane table {
       border-collapse: collapse;
       width: 100%;
-      margin: 10px 0;
+      min-width: 650px;
+      margin: 14px 0;
+      background: #131d35;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
     }
     .md-preview-pane th, .md-preview-pane td {
       border: 1px solid var(--border-color);
-      padding: 5px 8px;
+      padding: 10px 14px;
       text-align: left;
+      vertical-align: middle;
+      font-size: 0.84rem;
+      line-height: 1.6;
+      overflow-wrap: break-word;
+      word-break: normal;
     }
     .md-preview-pane th {
-      background: rgba(255, 255, 255, 0.05);
+      background: #1e293b;
+      color: var(--accent);
+      font-weight: 600;
+      white-space: nowrap;
     }
+    .md-preview-pane td:first-child {
+      width: 20%;
+      min-width: 110px;
+      font-weight: 600;
+      color: #f8fafc;
+      background: rgba(255, 255, 255, 0.02);
+    }
+    .md-preview-pane td:nth-child(2) {
+      width: 25%;
+      min-width: 140px;
+    }
+    .md-preview-pane td:nth-child(3) {
+      width: 55%;
+    }
+    .md-preview-pane tr:hover td {
+      background: rgba(56, 189, 248, 0.04);
+    }
+
     .modal-overlay {
       display: none;
       position: fixed;
@@ -384,6 +418,15 @@ try {
     let statusExtraData = '';
     let currentTab = 'edit';
 
+    if (typeof marked !== 'undefined') {
+      marked.setOptions({
+        gfm: true,
+        breaks: false,
+        headerIds: true,
+        mangle: false
+      });
+    }
+
     const i18nDictionary = {
       'zh-TW': {
         app_title: "MarkItDown (Pyodide WASM Engine)",
@@ -393,7 +436,7 @@ try {
         status_ready: "MarkItDown 引擎準備就緒 (Ready)",
         status_parsing: "解析檔案中...",
         status_loading_font: "載入繁中向量字型庫...",
-        status_generating_pdf: "排版編譯中 (JIS 禁則排版 + 雙軌分支向量拓撲)...",
+        status_generating_pdf: "排版編譯中 (JIS 禁則排版 + GFM 表格幾何摺疊)...",
         status_done: "解析完成: ",
         status_done_lossless: "100% 無損還原成功 (PDF/A-3 核心): ",
         status_err: "錯誤發生",
@@ -427,7 +470,7 @@ try {
         status_ready: "MarkItDown Engine Ready",
         status_parsing: "Parsing file...",
         status_loading_font: "Loading CJK Vector Font...",
-        status_generating_pdf: "Compiling PDF (JIS Typography + Dual-Track Vector Branching)...",
+        status_generating_pdf: "Compiling PDF (JIS Typography + GFM Table Folding)...",
         status_done: "Parsed: ",
         status_done_lossless: "100% Lossless Restored (PDF/A-3 Core): ",
         status_err: "Error occurred",
@@ -480,10 +523,87 @@ try {
       }
     }
 
-    function renderPreview() {
-      const mdText = inputMd.value;
-      previewPane.innerHTML = marked.parse(mdText || '');
+    // GitHub GFM 管線正規化器：將跨行破碎的管道表格單元格無損縫合為標準 GFM 表格
+    function normalizeToGfmTableAST(mdText) {
+      if (!mdText) return '';
+      const lines = mdText.split('\n');
+      const output = [];
+      let inTable = false;
+      let headerParsed = false;
+
+      for (let i = 0; i < lines.length; i++) {
+        const raw = lines[i];
+        const trimmed = raw.trim();
+
+        if (trimmed.startsWith('|') && trimmed.endsWith('|')) {
+          const rawCells = trimmed.slice(1, -1).split('|').map(c => c.trim());
+          const isDivider = rawCells.every(c => c.match(/^:?-+:?$/));
+
+          if (isDivider) {
+            inTable = true;
+            headerParsed = true;
+            output.push(trimmed);
+            continue;
+          }
+
+          if (!headerParsed) {
+            output.push(trimmed);
+            continue;
+          }
+
+          const prevIdx = output.length - 1;
+          const prevLine = output[prevIdx] || '';
+          const prevCells = prevLine.slice(1, -1).split('|').map(c => c.trim());
+
+          // 判斷是否為次行碎裂碎片（如無主標題、未閉合星號、小括號延續）
+          const isContinuation = (
+            rawCells[0] === '' ||
+            (rawCells[0].includes('**') && !rawCells[0].startsWith('**')) ||
+            (prevCells[0] && prevCells[0].startsWith('**') && !prevCells[0].endsWith('**')) ||
+            rawCells[0].startsWith('(') ||
+            rawCells[0].endsWith(')') ||
+            /^[a-zA-Z0-9_\u4e00-\u9fa5]{1,3}\*{0,2}$/.test(rawCells[0])
+          );
+
+          if (isContinuation && prevCells.length === rawCells.length) {
+            const mergedCells = prevCells.map((p, cIdx) => {
+              const cur = rawCells[cIdx] || '';
+              if (!cur) return p;
+              
+              // 處理英文連字號 (e.g. Zero-In + stall -> Zero-Install)
+              if (p.endsWith('-')) {
+                return `${p}${cur}`;
+              }
+              // 處理粗體星號跨行縫合 (e.g. **可逆 + PDF 匯出** -> **可逆 PDF 匯出**)
+              if (p.startsWith('**') && !p.endsWith('**') && cur.endsWith('**')) {
+                return `${p} ${cur}`;
+              }
+              return `${p} ${cur}`;
+            });
+
+            output[prevIdx] = '| ' + mergedCells.join(' | ') + ' |';
+          } else {
+            output.push(trimmed);
+          }
+        } else {
+          inTable = false;
+          headerParsed = false;
+          output.push(raw);
+        }
+      }
+      return output.join('\n');
     }
+
+    function renderPreview() {
+      let mdText = inputMd.value || '';
+      mdText = mdText.replace(/<!--[\s\S]*?-->/g, '');
+      mdText = normalizeToGfmTableAST(mdText);
+      previewPane.innerHTML = marked.parse(mdText);
+    }
+
+    inputMd.addEventListener('input', () => {
+      if (currentTab === 'preview') renderPreview();
+    });
 
     function setEngineStatus(key, extra = '') {
       currentStatusKey = key;
@@ -672,11 +792,11 @@ class PdfConverter:
                 
                 is_table = False
                 if len(lines) >= 2:
-                    rows = [[c.strip() for c in re.split(r"\\s{2,}", l) if c.strip()] for l in lines]
-                    if all(len(r) >= 2 for r in rows):
+                    raw_rows = [[c.strip() for c in re.split(r"\\s{2,}", l) if c.strip()] for l in lines]
+                    if all(len(r) >= 2 for r in raw_rows):
                         is_table = True
-                        max_c = max(len(r) for r in rows)
-                        padded = [r + [""] * (max_c - len(r)) for r in rows]
+                        max_c = max(len(r) for r in raw_rows)
+                        padded = [r + [""] * (max_c - len(r)) for r in raw_rows]
                         header = "| " + " | ".join(padded[0]) + " |"
                         div = "| " + " | ".join(["---"] * max_c) + " |"
                         body = ["| " + " | ".join(r) + " |" for r in padded[1:]]
@@ -767,8 +887,9 @@ def execute_markitdown(file_bytes, filename):
         const pyRes = executeFunc(uint8Array, file.name);
         const res = pyRes.toJs();
 
-        outputMd.value = res.get('text');
-        inputMd.value = res.get('text');
+        const parsedText = res.get('text');
+        outputMd.value = parsedText;
+        inputMd.value = parsedText;
         if (currentTab === 'preview') renderPreview();
         
         if (res.get('is_lossless')) {
@@ -805,7 +926,7 @@ def execute_markitdown(file_bytes, filename):
       return s;
     }
 
-    // 排版引擎核心 (v1.31.10)：完全過濾 HTML 註解、頁內錨點淨化、單字保護、雙軌向量拓撲
+    // 排版引擎核心 (v1.31.17)
     async function exportFullEnginePdf() {
       const dict = () => i18nDictionary[currentLang] || i18nDictionary['en'];
       let mdText = inputMd.value;
@@ -814,8 +935,9 @@ def execute_markitdown(file_bytes, filename):
         return;
       }
 
-      // 徹底剔除 HTML 註解 (如 <!-- 作者... -->)
+      const sourceMdForAttachment = mdText;
       mdText = mdText.replace(/<!--[\s\S]*?-->/g, '');
+      mdText = normalizeToGfmTableAST(mdText);
       mdText = sanitizeLigatures(mdText);
 
       try {
@@ -876,15 +998,16 @@ def execute_markitdown(file_bytes, filename):
           const h = size + lineSpacing;
           ensureSpace(h);
 
-          // 支援外鏈 (https://) 及 頁內錨點 (#)
+          const cleanText = rawText.replace(/\*\*([^*]+)\*\*/g, '$1');
+
           const linkRegex = /\[([^\]]+)\]\(([^)]+)\)|(https?:\/\/[^\s\)]+)/g;
           let lastIdx = 0;
           let curX = margin + indent;
           const drawY = cursorY - size;
           let match;
 
-          while ((match = linkRegex.exec(rawText)) !== null) {
-            const preText = rawText.substring(lastIdx, match.index);
+          while ((match = linkRegex.exec(cleanText)) !== null) {
+            const preText = cleanText.substring(lastIdx, match.index);
             if (preText) {
               currentPage.drawText(preText, { x: curX, y: drawY, size, font: cjkFont, color });
               curX += cjkFont.widthOfTextAtSize(preText, size);
@@ -896,7 +1019,6 @@ def execute_markitdown(file_bytes, filename):
             const linkWidth = cjkFont.widthOfTextAtSize(linkText, size);
 
             if (isWebUrl) {
-              // 原生可點擊 Web 超連結
               currentPage.drawText(linkText, {
                 x: curX,
                 y: drawY,
@@ -914,7 +1036,6 @@ def execute_markitdown(file_bytes, filename):
 
               addPdfHyperlink(currentPage, curX, drawY, linkWidth, size, linkUrl);
             } else {
-              // 頁內錨點 (如 [#繁體中文](#繁體中文))：消除括號語法，以優雅文字呈現
               currentPage.drawText(linkText, {
                 x: curX,
                 y: drawY,
@@ -928,7 +1049,7 @@ def execute_markitdown(file_bytes, filename):
             lastIdx = match.index + match[0].length;
           }
 
-          const remainText = rawText.substring(lastIdx);
+          const remainText = cleanText.substring(lastIdx);
           if (remainText) {
             currentPage.drawText(remainText, { x: curX, y: drawY, size, font: cjkFont, color });
           }
@@ -937,13 +1058,12 @@ def execute_markitdown(file_bytes, filename):
         }
 
         function drawParagraphBlock(text, size, color, indent = 0, lineSpacing = 4, bottomMargin = 6) {
-          const clean = sanitizeLigatures(text);
+          const clean = sanitizeLigatures(text).replace(/\*\*([^*]+)\*\*/g, '$1');
           const maxW = usableWidth - indent;
 
           const kinsokuLineHead = "、。，．）〕］｝々ーァィゥェォッャュョヮヵヶ!?！？)]},.:;?!";
           const kinsokuLineEnd = "（〔［｛「『【([{";
 
-          // 改進分詞：保持完整詞組與檔名 (如 Run-MarkItDownServer.ps1)，避免在破折號處拆碎單字
           const tokenRegex = /\[[^\]]+\]\([^\)]+\)|https?:\/\/[^\s\)]+|[a-zA-Z0-9_\-\.\@\:]+|\s+|[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]|./g;
           const tokens = clean.match(tokenRegex) || [clean];
 
@@ -978,7 +1098,6 @@ def execute_markitdown(file_bytes, filename):
           cursorY -= bottomMargin;
         }
 
-        // 原生向量拓撲繪製 (支援 Mermaid DAG 與 Text Diagram 節點)
         function drawVectorFlowchart(chartLines) {
           const nodeDict = new Map();
           for (const line of chartLines) {
@@ -1066,12 +1185,10 @@ def execute_markitdown(file_bytes, filename):
           cursorY -= 12;
         }
 
-        // 文字框線圖（ASCII/Unicode Text Diagram）原生雙軌分支向量重組引擎
         function drawAsciiTextDiagram(diagramLines) {
           const pipeline = [];
 
           for (const line of diagramLines) {
-            // 僅過濾真正的框線字元，嚴格保留連字號 (-) 與加號 (+)
             const cleaned = line.replace(/[\u2500-\u257F\u2580-\u259F\u25A0-\u25FF]/g, ' ').trim();
             if (cleaned.length < 2) continue;
 
@@ -1082,7 +1199,6 @@ def execute_markitdown(file_bytes, filename):
               continue;
             }
 
-            // 檢測是否為水平並排雙分支（以 3 個以上空白分割，或各自被 [] 括住）
             const multiCols = cleaned.split(/\s{3,}/).map(s => s.trim()).filter(s => s.length > 0);
             if (multiCols.length >= 2) {
               pipeline.push({ type: 'split', items: multiCols });
@@ -1159,7 +1275,6 @@ def execute_markitdown(file_bytes, filename):
 
               cursorY -= (singleH + 2);
             } else if (step.type === 'split') {
-              // 左右對稱雙卡片排版
               ensureSpace(singleH + 4);
               const numCols = step.items.length;
               const colGap = 12;
@@ -1209,10 +1324,15 @@ def execute_markitdown(file_bytes, filename):
           const dataRows = rows.slice(1).filter(r => !r.every(c => c.match(/^:?-+:?$/)));
 
           const colCount = header.length;
-          const firstColW = Math.min(130, usableWidth * 0.28);
-          const otherColW = (usableWidth - firstColW) / Math.max(1, colCount - 1);
-          const colWidths = [firstColW];
-          for (let c = 1; c < colCount; c++) colWidths.push(otherColW);
+          const firstColW = usableWidth * 0.22;
+          const secondColW = usableWidth * 0.28;
+          const thirdColW = usableWidth - (firstColW + secondColW);
+          
+          const colWidths = colCount === 3 ? [firstColW, secondColW, thirdColW] : [];
+          if (colWidths.length === 0) {
+            const equalW = usableWidth / colCount;
+            for (let c = 0; c < colCount; c++) colWidths.push(equalW);
+          }
 
           const allRows = [header, ...dataRows];
           for (let rIdx = 0; rIdx < allRows.length; rIdx++) {
@@ -1221,7 +1341,9 @@ def execute_markitdown(file_bytes, filename):
 
             const cellLines = row.map((cellText, cIdx) => {
               const maxW = colWidths[cIdx] - 10;
-              const chars = Array.from(sanitizeLigatures(cellText));
+              const cleanCell = sanitizeLigatures(cellText).replace(/\*\*([^*]+)\*\*/g, '$1').trim();
+              
+              const chars = Array.from(cleanCell);
               const lines = [];
               let cur = '';
               for (const ch of chars) {
@@ -1306,24 +1428,20 @@ def execute_markitdown(file_bytes, filename):
 
             const innerText = innerLines.join('\n');
 
-            // 辨識是否為 ASCII / Text Diagram 框線流程圖
             const isAsciiBoxDiagram = /[\u2500-\u257F\u2580-\u259F\u25A0-\u25FF]/.test(innerText) || 
                                      (innerText.includes('+-') && innerText.includes('-+')) ||
                                      (innerText.includes('┌') && innerText.includes('└'));
 
-            // 辨識是否為 Mermaid 語法
             const isFenceFlow = fenceTag.includes('mermaid') || 
                                 fenceTag.includes('flow') || 
                                 /owchart|graph/i.test(innerText) || 
                                 (innerText.includes('-->') && /[\[\{\(]/.test(innerText));
 
             if (isAsciiBoxDiagram) {
-              // 自動將文字框線圖轉為 PDF 向量拓撲圖
               drawAsciiTextDiagram(innerLines);
             } else if (isFenceFlow) {
               drawVectorFlowchart(innerLines);
             } else {
-              // 一般純代碼區塊：自適應摺行，保證長行不截斷
               const codeMaxW = usableWidth - 16;
               const wrappedCodeLines = [];
               for (const line of innerLines) {
@@ -1468,7 +1586,7 @@ def execute_markitdown(file_bytes, filename):
           i++;
         }
 
-        const utf8Bytes = new TextEncoder().encode(inputMd.value);
+        const utf8Bytes = new TextEncoder().encode(sourceMdForAttachment);
         await pdfDoc.attach(utf8Bytes, 'source.md', {
           mimeType: 'text/markdown',
           description: 'MarkItDown 原始無損 Markdown 來源',
@@ -1504,7 +1622,9 @@ def execute_markitdown(file_bytes, filename):
         return;
       }
 
-      const parsedContent = marked.parse(mdText);
+      let cleanedMd = mdText.replace(/<!--[\s\S]*?-->/g, '');
+      cleanedMd = normalizeToGfmTableAST(cleanedMd);
+      const parsedContent = marked.parse(cleanedMd);
       const fullHtml = `<!DOCTYPE html>
 <html lang="zh-TW">
 <head>
