@@ -1,8 +1,8 @@
 <!--
 作者 startgo (startgo@yia.app)
 授權預設 GPLv3
-時間: 2026-11-09 17:10:00 UTC+8
-版本: v1.31.5
+時間: 2026-11-09 17:25:00 UTC+8
+版本: v1.31.6
 -->
 
 # MarkItDown Browser Edition (Pyodide WASM Engine)
@@ -39,18 +39,6 @@
 ┌───────────────────────────┐ ┌───────────────────────────┐
 │     標準 Markdown 文本    │ │ 雙軌可逆 PDF (含附件源碼) │
 └───────────────────────────┘ └───────────────────────────┘
-```
-
-```mermaid
-flowchart TD
-    A["　執行本機腳本　"] --> B["　綁定本機連接埠　"]
-    B --> C["　啟動瀏覽器核心　"]
-    C --> D{"　選擇模式　"}
-    D -->|解析| E["　Python 轉譯　"]
-    D -->|匯出| F["　向量排版　"]
-    E --> G["　Markdown 輸出　"]
-    F --> H["　可逆 PDF 輸出　"]
-    H --> I["　附件原始碼封裝　"]
 ```
 
 ### 核心規格與技術對照
@@ -132,18 +120,6 @@ It boots via a single PowerShell script utilizing `.NET HttpListener` on an ephe
 └───────────────────────────┘ └───────────────────────────┘
 ```
 
-```mermaid
-flowchart TD
-    A["　Run Script　"] --> B["　Dynamic Port　"]
-    B --> C["　Browser Engine　"]
-    C --> D{"　Select Mode　"}
-    D -->|Import| E["　Python Parser　"]
-    D -->|Export| F["　Vector Layout　"]
-    E --> G["　Markdown Output　"]
-    F --> H["　Reversible PDF　"]
-    H --> I["　Attachment Core　"]
-```
-
 ### Technical Specifications
 
 | Module | Solution | Technical Bounds |
@@ -221,18 +197,6 @@ Click **Load i18n Pack** to inject an external translation schema without recomp
 ┌───────────────────────────┐ ┌───────────────────────────┐
 │     標準 Markdown 抽出    │ │ 可逆 PDF 出力 (添付原稿)  │
 └───────────────────────────┘ └───────────────────────────┘
-```
-
-```mermaid
-flowchart TD
-    A["　スクリプト実行　"] --> B["　動的ポート確保　"]
-    B --> C["　ブラウザ基盤起動　"]
-    C --> D{"　処理モード選択　"}
-    D -->|解析| E["　Python 変換　"]
-    D -->|出力| F["　ベクター組版　"]
-    E --> G["　Markdown 抽出　"]
-    F --> H["　可逆 PDF 出力　"]
-    H --> I["　原稿添付完了　"]
 ```
 
 ### 機能・技術仕様比較
