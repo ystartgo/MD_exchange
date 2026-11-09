@@ -1,8 +1,8 @@
 <!--
 作者 startgo (startgo@yia.app)
 授權預設 GPLv3
-時間: 2026-11-09 17:00:00 UTC+8
-版本: v1.31.4
+時間: 2026-11-09 17:10:00 UTC+8
+版本: v1.31.5
 -->
 
 # MarkItDown Browser Edition (Pyodide WASM Engine)
@@ -17,18 +17,40 @@
 
 系統透過單一 PowerShell 啟動腳本，呼叫 `.NET HttpListener` 自動取得可用 Port 載入 Web 服務，核心運算全由 Pyodide (WebAssembly) 及 WASM 模組在前端沙盒執行，本機無須安裝 Python、編譯器或任何依賴庫。
 
-### 系統架構圖 (System Topology)
+### 系統架構拓撲 (System Topology)
+
+```text
+┌────────────────────────────────────────────────────────┐
+│             本機執行 Run-MarkItDownServer.ps1          │
+└───────────────────────────┬────────────────────────────┘
+                            │ (.NET 綁定 127.0.0.1 動態連接埠)
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│             瀏覽器載入 Pyodide v0.26.2 WASM            │
+└───────────────────────────┬────────────────────────────┘
+                            │
+              ┌─────────────┴─────────────┐
+        [ 解析匯入 ]                 [ 編輯匯出 ]
+              ▼                           ▼
+┌───────────────────────────┐ ┌───────────────────────────┐
+│ pdfminer.six / BS4 / mdify│ │ pdf-lib + fontkit + 思源OTF│
+└─────────────┬─────────────┘ └─────────────┬─────────────┘
+              ▼                           ▼
+┌───────────────────────────┐ ┌───────────────────────────┐
+│     標準 Markdown 文本    │ │ 雙軌可逆 PDF (含附件源碼) │
+└───────────────────────────┘ └───────────────────────────┘
+```
 
 ```mermaid
 flowchart TD
-    A[執行本機腳本] --> B[.NET 綁定連接埠]
-    B --> C[啟動瀏覽器載入引擎]
-    C --> D{文件轉換模式}
-    D -->|匯入解析| E[Python 轉譯管線]
-    D -->|編輯匯出| F[向量排版引擎]
-    E --> G[輸出標準 Markdown]
-    F --> H[輸出雙軌可逆 PDF]
-    H --> I[包含向量頁面與附件]
+    A["　執行本機腳本　"] --> B["　綁定本機連接埠　"]
+    B --> C["　啟動瀏覽器核心　"]
+    C --> D{"　選擇模式　"}
+    D -->|解析| E["　Python 轉譯　"]
+    D -->|匯出| F["　向量排版　"]
+    E --> G["　Markdown 輸出　"]
+    F --> H["　可逆 PDF 輸出　"]
+    H --> I["　附件原始碼封裝　"]
 ```
 
 ### 核心規格與技術對照
@@ -86,18 +108,40 @@ A browser-native document conversion and reversible dual-track PDF rendering too
 
 It boots via a single PowerShell script utilizing `.NET HttpListener` on an ephemeral loopback port. All computations are sandboxed client-side via Pyodide (WebAssembly), requiring no local Python runtime, compilers, or server-side dependencies.
 
-### System Architecture
+### System Topology
+
+```text
+┌────────────────────────────────────────────────────────┐
+│              Run Run-MarkItDownServer.ps1              │
+└───────────────────────────┬────────────────────────────┘
+                            │ (.NET binds to 127.0.0.1 dynamic port)
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│             Browser loads Pyodide v0.26.2 WASM         │
+└───────────────────────────┬────────────────────────────┘
+                            │
+              ┌─────────────┴─────────────┐
+        [ Parse & Import ]           [ Edit & Export ]
+              ▼                           ▼
+┌───────────────────────────┐ ┌───────────────────────────┐
+│ pdfminer.six / BS4 / mdify│ │ pdf-lib + fontkit + CJK OTF│
+└─────────────┬─────────────┘ └─────────────┬─────────────┘
+              ▼                           ▼
+┌───────────────────────────┐ ┌───────────────────────────┐
+│     Standard Markdown     │ │ Reversible PDF (w/ Source)│
+└───────────────────────────┘ └───────────────────────────┘
+```
 
 ```mermaid
 flowchart TD
-    A[Run Local Script] --> B[.NET Dynamic Port]
-    B --> C[Launch Browser Engine]
-    C --> D{Select Pipeline}
-    D -->|Parse Import| E[Python Parser Core]
-    D -->|Export PDF| F[Vector Layout Core]
-    E --> G[Standard Markdown]
-    F --> H[Reversible PDF]
-    H --> I[Vector Pages & Attachments]
+    A["　Run Script　"] --> B["　Dynamic Port　"]
+    B --> C["　Browser Engine　"]
+    C --> D{"　Select Mode　"}
+    D -->|Import| E["　Python Parser　"]
+    D -->|Export| F["　Vector Layout　"]
+    E --> G["　Markdown Output　"]
+    F --> H["　Reversible PDF　"]
+    H --> I["　Attachment Core　"]
 ```
 
 ### Technical Specifications
@@ -157,16 +201,38 @@ Click **Load i18n Pack** to inject an external translation schema without recomp
 
 ### 処理フロー (System Topology)
 
+```text
+┌────────────────────────────────────────────────────────┐
+│             Run-MarkItDownServer.ps1 実行              │
+└───────────────────────────┬────────────────────────────┘
+                            │ (.NET 内部バインド 127.0.0.1 動的ポート)
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│             ブラウザ自動起動 Pyodide WASM 読込         │
+└───────────────────────────┬────────────────────────────┘
+                            │
+              ┌─────────────┴─────────────┐
+        [ 解析・インポート ]         [ 編集・エクスポート ]
+              ▼                           ▼
+┌───────────────────────────┐ ┌───────────────────────────┐
+│ pdfminer.six / BS4 / mdify│ │ pdf-lib + fontkit + 思源OTF│
+└─────────────┬─────────────┘ └─────────────┬─────────────┘
+              ▼                           ▼
+┌───────────────────────────┐ ┌───────────────────────────┐
+│     標準 Markdown 抽出    │ │ 可逆 PDF 出力 (添付原稿)  │
+└───────────────────────────┘ └───────────────────────────┘
+```
+
 ```mermaid
 flowchart TD
-    A[ローカル起動実行] --> B[.NET ポート確保]
-    B --> C[ブラウザ基盤起動]
-    C --> D{処理モード選択}
-    D -->|解析読込| E[Python 変換パイプライン]
-    D -->|編集出力| F[ベクター組版エンジン]
-    E --> G[標準 Markdown 抽出]
-    F --> H[可逆 PDF 出力]
-    H --> I[ベクター層と添付ファイル]
+    A["　スクリプト実行　"] --> B["　動的ポート確保　"]
+    B --> C["　ブラウザ基盤起動　"]
+    C --> D{"　処理モード選択　"}
+    D -->|解析| E["　Python 変換　"]
+    D -->|出力| F["　ベクター組版　"]
+    E --> G["　Markdown 抽出　"]
+    F --> H["　可逆 PDF 出力　"]
+    H --> I["　原稿添付完了　"]
 ```
 
 ### 機能・技術仕様比較
