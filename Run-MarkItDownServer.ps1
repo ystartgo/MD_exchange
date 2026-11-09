@@ -1,8 +1,8 @@
 ﻿<#
 作者 startgo (startgo@yia.app)
 授權預設 GPLv3
-時間: 2026-11-09 20:05:00 UTC+8
-版本: v1.31.1
+時間: 2026-11-09 18:30:00 UTC+8
+版本: v1.31.10
 #>
 
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -393,7 +393,7 @@ try {
         status_ready: "MarkItDown 引擎準備就緒 (Ready)",
         status_parsing: "解析檔案中...",
         status_loading_font: "載入繁中向量字型庫...",
-        status_generating_pdf: "排版編譯中 (JIS 禁則日系排版 + 圍欄穿透流程圖)...",
+        status_generating_pdf: "排版編譯中 (JIS 禁則排版 + 雙軌分支向量拓撲)...",
         status_done: "解析完成: ",
         status_done_lossless: "100% 無損還原成功 (PDF/A-3 核心): ",
         status_err: "錯誤發生",
@@ -427,7 +427,7 @@ try {
         status_ready: "MarkItDown Engine Ready",
         status_parsing: "Parsing file...",
         status_loading_font: "Loading CJK Vector Font...",
-        status_generating_pdf: "Compiling PDF (JIS Typography + Fence Penetrated Diagram)...",
+        status_generating_pdf: "Compiling PDF (JIS Typography + Dual-Track Vector Branching)...",
         status_done: "Parsed: ",
         status_done_lossless: "100% Lossless Restored (PDF/A-3 Core): ",
         status_err: "Error occurred",
@@ -805,7 +805,7 @@ def execute_markitdown(file_bytes, filename):
       return s;
     }
 
-    // 排版引擎核心 (v1.31.1)：JIS X 4051 日系排版禁則 + 圍欄穿透流程圖 + 原生可點擊超連結
+    // 排版引擎核心 (v1.31.10)：完全過濾 HTML 註解、頁內錨點淨化、單字保護、雙軌向量拓撲
     async function exportFullEnginePdf() {
       const dict = () => i18nDictionary[currentLang] || i18nDictionary['en'];
       let mdText = inputMd.value;
@@ -814,6 +814,8 @@ def execute_markitdown(file_bytes, filename):
         return;
       }
 
+      // 徹底剔除 HTML 註解 (如 <!-- 作者... -->)
+      mdText = mdText.replace(/<!--[\s\S]*?-->/g, '');
       mdText = sanitizeLigatures(mdText);
 
       try {
@@ -874,7 +876,8 @@ def execute_markitdown(file_bytes, filename):
           const h = size + lineSpacing;
           ensureSpace(h);
 
-          const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s\)]+)\)|(https?:\/\/[^\s\)]+)/g;
+          // 支援外鏈 (https://) 及 頁內錨點 (#)
+          const linkRegex = /\[([^\]]+)\]\(([^)]+)\)|(https?:\/\/[^\s\)]+)/g;
           let lastIdx = 0;
           let curX = margin + indent;
           const drawY = cursorY - size;
@@ -889,24 +892,37 @@ def execute_markitdown(file_bytes, filename):
 
             const linkText = match[1] || match[3];
             const linkUrl = match[2] || match[3];
+            const isWebUrl = /^https?:\/\//i.test(linkUrl);
             const linkWidth = cjkFont.widthOfTextAtSize(linkText, size);
 
-            currentPage.drawText(linkText, {
-              x: curX,
-              y: drawY,
-              size,
-              font: cjkFont,
-              color: rgb(0.01, 0.45, 0.85)
-            });
+            if (isWebUrl) {
+              // 原生可點擊 Web 超連結
+              currentPage.drawText(linkText, {
+                x: curX,
+                y: drawY,
+                size,
+                font: cjkFont,
+                color: rgb(0.01, 0.45, 0.85)
+              });
 
-            currentPage.drawLine({
-              start: { x: curX, y: drawY - 1 },
-              end: { x: curX + linkWidth, y: drawY - 1 },
-              thickness: 0.5,
-              color: rgb(0.01, 0.45, 0.85)
-            });
+              currentPage.drawLine({
+                start: { x: curX, y: drawY - 1 },
+                end: { x: curX + linkWidth, y: drawY - 1 },
+                thickness: 0.5,
+                color: rgb(0.01, 0.45, 0.85)
+              });
 
-            addPdfHyperlink(currentPage, curX, drawY, linkWidth, size, linkUrl);
+              addPdfHyperlink(currentPage, curX, drawY, linkWidth, size, linkUrl);
+            } else {
+              // 頁內錨點 (如 [#繁體中文](#繁體中文))：消除括號語法，以優雅文字呈現
+              currentPage.drawText(linkText, {
+                x: curX,
+                y: drawY,
+                size,
+                font: cjkFont,
+                color: rgb(0.2, 0.3, 0.4)
+              });
+            }
 
             curX += linkWidth;
             lastIdx = match.index + match[0].length;
@@ -927,6 +943,7 @@ def execute_markitdown(file_bytes, filename):
           const kinsokuLineHead = "、。，．）〕］｝々ーァィゥェォッャュョヮヵヶ!?！？)]},.:;?!";
           const kinsokuLineEnd = "（〔［｛「『【([{";
 
+          // 改進分詞：保持完整詞組與檔名 (如 Run-MarkItDownServer.ps1)，避免在破折號處拆碎單字
           const tokenRegex = /\[[^\]]+\]\([^\)]+\)|https?:\/\/[^\s\)]+|[a-zA-Z0-9_\-\.\@\:]+|\s+|[\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]|./g;
           const tokens = clean.match(tokenRegex) || [clean];
 
@@ -961,13 +978,14 @@ def execute_markitdown(file_bytes, filename):
           cursorY -= bottomMargin;
         }
 
+        // 原生向量拓撲繪製 (支援 Mermaid DAG 與 Text Diagram 節點)
         function drawVectorFlowchart(chartLines) {
           const nodeDict = new Map();
           for (const line of chartLines) {
             const trimmed = line.trim();
             if (!trimmed || trimmed.toLowerCase().includes('chart') || trimmed.toLowerCase().startsWith('graph')) continue;
 
-            const nodeRegex = /([a-zA-Z0-9_]+)\s*(\[|\{|\(\()([^\]\}\)]+)(\]|\}|\)\))/g;
+            const nodeRegex = /([a-zA-Z0-9_\u4e00-\u9fa5]+)\s*(\[|\{|\(\()([^\]\}\)]+)(\]|\}|\)\))/g;
             let match;
             while ((match = nodeRegex.exec(trimmed)) !== null) {
               const id = match[1];
@@ -982,7 +1000,7 @@ def execute_markitdown(file_bytes, filename):
           const nodes = Array.from(nodeDict.values());
           if (nodes.length === 0) return;
 
-          const boxW = Math.min(usableWidth * 0.78, 380);
+          const boxW = Math.min(usableWidth * 0.85, 420);
           const boxH = 22;
           const gap = 14;
           const startX = margin + (usableWidth - boxW) / 2;
@@ -1003,7 +1021,7 @@ def execute_markitdown(file_bytes, filename):
               borderWidth: isDiamond ? 1 : 0.8
             });
 
-            const labelText = node.label.substring(0, 42);
+            const labelText = node.label.substring(0, 48);
             const textW = cjkFont.widthOfTextAtSize(labelText, 8.5);
             const textX = startX + Math.max(6, (boxW - textW) / 2);
             const textY = cursorY - (boxH / 2) - 3.2;
@@ -1046,6 +1064,138 @@ def execute_markitdown(file_bytes, filename):
             }
           }
           cursorY -= 12;
+        }
+
+        // 文字框線圖（ASCII/Unicode Text Diagram）原生雙軌分支向量重組引擎
+        function drawAsciiTextDiagram(diagramLines) {
+          const pipeline = [];
+
+          for (const line of diagramLines) {
+            // 僅過濾真正的框線字元，嚴格保留連字號 (-) 與加號 (+)
+            const cleaned = line.replace(/[\u2500-\u257F\u2580-\u259F\u25A0-\u25FF]/g, ' ').trim();
+            if (cleaned.length < 2) continue;
+
+            const isNote = cleaned.startsWith('(') || cleaned.includes('.NET') || cleaned.includes('▼') || cleaned.includes('->');
+            
+            if (isNote) {
+              pipeline.push({ type: 'note', text: cleaned.replace(/^[\|\▼\s]+/, '').trim() });
+              continue;
+            }
+
+            // 檢測是否為水平並排雙分支（以 3 個以上空白分割，或各自被 [] 括住）
+            const multiCols = cleaned.split(/\s{3,}/).map(s => s.trim()).filter(s => s.length > 0);
+            if (multiCols.length >= 2) {
+              pipeline.push({ type: 'split', items: multiCols });
+            } else {
+              pipeline.push({ type: 'node', text: cleaned });
+            }
+          }
+
+          if (pipeline.length === 0) return;
+
+          const totalW = Math.min(usableWidth * 0.92, 480);
+          const startX = margin + (usableWidth - totalW) / 2;
+          const singleH = 24;
+
+          for (let idx = 0; idx < pipeline.length; idx++) {
+            const step = pipeline[idx];
+
+            if (step.type === 'note') {
+              ensureSpace(18);
+              const midX = startX + totalW / 2;
+
+              currentPage.drawLine({
+                start: { x: midX, y: cursorY },
+                end: { x: midX, y: cursorY - 14 },
+                thickness: 0.8,
+                color: rgb(0.2, 0.5, 0.7)
+              });
+              currentPage.drawLine({
+                start: { x: midX - 3, y: cursorY - 10 },
+                end: { x: midX, y: cursorY - 14 },
+                thickness: 0.8,
+                color: rgb(0.2, 0.5, 0.7)
+              });
+              currentPage.drawLine({
+                start: { x: midX + 3, y: cursorY - 10 },
+                end: { x: midX, y: cursorY - 14 },
+                thickness: 0.8,
+                color: rgb(0.2, 0.5, 0.7)
+              });
+
+              if (step.text) {
+                currentPage.drawText(step.text, {
+                  x: midX + 8,
+                  y: cursorY - 10,
+                  size: 7.5,
+                  font: cjkFont,
+                  color: rgb(0.35, 0.45, 0.55)
+                });
+              }
+              cursorY -= 18;
+            } else if (step.type === 'node') {
+              ensureSpace(singleH + 4);
+              currentPage.drawRectangle({
+                x: startX,
+                y: cursorY - singleH,
+                width: totalW,
+                height: singleH,
+                color: rgb(0.96, 0.98, 1.0),
+                borderColor: rgb(0.22, 0.58, 0.85),
+                borderWidth: 0.8
+              });
+
+              const textW = cjkFont.widthOfTextAtSize(step.text, 8.8);
+              const textX = startX + Math.max(6, (totalW - textW) / 2);
+              const textY = cursorY - (singleH / 2) - 3.2;
+
+              currentPage.drawText(step.text, {
+                x: textX,
+                y: textY,
+                size: 8.8,
+                font: cjkFont,
+                color: rgb(0.02, 0.18, 0.38)
+              });
+
+              cursorY -= (singleH + 2);
+            } else if (step.type === 'split') {
+              // 左右對稱雙卡片排版
+              ensureSpace(singleH + 4);
+              const numCols = step.items.length;
+              const colGap = 12;
+              const colW = (totalW - colGap * (numCols - 1)) / numCols;
+
+              for (let c = 0; c < numCols; c++) {
+                const cardX = startX + c * (colW + colGap);
+                const isEgress = c === 1;
+
+                currentPage.drawRectangle({
+                  x: cardX,
+                  y: cursorY - singleH,
+                  width: colW,
+                  height: singleH,
+                  color: isEgress ? rgb(0.99, 0.98, 0.94) : rgb(0.94, 0.97, 1.0),
+                  borderColor: isEgress ? rgb(0.85, 0.65, 0.13) : rgb(0.22, 0.58, 0.85),
+                  borderWidth: 0.8
+                });
+
+                const label = step.items[c];
+                const textW = cjkFont.widthOfTextAtSize(label, 8.2);
+                const textX = cardX + Math.max(4, (colW - textW) / 2);
+                const textY = cursorY - (singleH / 2) - 3.2;
+
+                currentPage.drawText(label, {
+                  x: textX,
+                  y: textY,
+                  size: 8.2,
+                  font: cjkFont,
+                  color: isEgress ? rgb(0.45, 0.3, 0.05) : rgb(0.02, 0.22, 0.42)
+                });
+              }
+              cursorY -= (singleH + 2);
+            }
+          }
+          cursorY -= 10;
         }
 
         function drawMarkdownTable(tableLines) {
@@ -1155,15 +1305,42 @@ def execute_markitdown(file_bytes, filename):
             if (i < allLines.length) i++;
 
             const innerText = innerLines.join('\n');
+
+            // 辨識是否為 ASCII / Text Diagram 框線流程圖
+            const isAsciiBoxDiagram = /[\u2500-\u257F\u2580-\u259F\u25A0-\u25FF]/.test(innerText) || 
+                                     (innerText.includes('+-') && innerText.includes('-+')) ||
+                                     (innerText.includes('┌') && innerText.includes('└'));
+
+            // 辨識是否為 Mermaid 語法
             const isFenceFlow = fenceTag.includes('mermaid') || 
                                 fenceTag.includes('flow') || 
                                 /owchart|graph/i.test(innerText) || 
                                 (innerText.includes('-->') && /[\[\{\(]/.test(innerText));
 
-            if (isFenceFlow) {
+            if (isAsciiBoxDiagram) {
+              // 自動將文字框線圖轉為 PDF 向量拓撲圖
+              drawAsciiTextDiagram(innerLines);
+            } else if (isFenceFlow) {
               drawVectorFlowchart(innerLines);
             } else {
-              const codeH = innerLines.length * 11 + 12;
+              // 一般純代碼區塊：自適應摺行，保證長行不截斷
+              const codeMaxW = usableWidth - 16;
+              const wrappedCodeLines = [];
+              for (const line of innerLines) {
+                if (!line) { wrappedCodeLines.push(''); continue; }
+                let cur = '';
+                for (const ch of Array.from(line)) {
+                  if (cjkFont.widthOfTextAtSize(cur + ch, 8) > codeMaxW && cur.length > 0) {
+                    wrappedCodeLines.push(cur);
+                    cur = '  ' + ch;
+                  } else {
+                    cur += ch;
+                  }
+                }
+                if (cur.length > 0) wrappedCodeLines.push(cur);
+              }
+
+              const codeH = wrappedCodeLines.length * 11 + 12;
               ensureSpace(codeH);
               currentPage.drawRectangle({
                 x: margin,
@@ -1175,8 +1352,8 @@ def execute_markitdown(file_bytes, filename):
                 borderWidth: 0.5
               });
               cursorY -= 8;
-              for (const l of innerLines) {
-                drawRichTextLine(l.substring(0, 85), 8, rgb(0.15, 0.2, 0.25), 6, 3);
+              for (const l of wrappedCodeLines) {
+                drawRichTextLine(l, 8, rgb(0.15, 0.2, 0.25), 6, 3);
               }
               cursorY -= 6;
             }
