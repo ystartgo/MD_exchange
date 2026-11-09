@@ -1,8 +1,8 @@
 <!--
 作者 startgo (startgo@yia.app)
 授權預設 GPLv3
-時間: 2026-11-09 16:45:00 UTC+8
-版本: v1.31.2
+時間: 2026-11-09 16:50:00 UTC+8
+版本: v1.31.3
 -->
 
 # MarkItDown Browser Edition (Pyodide WASM Engine)
@@ -21,14 +21,14 @@
 
 ```mermaid
 flowchart TD
-    A[本機執行<br/>Run-MarkItDownServer.ps1] --> B[.NET 綁定<br/>127.0.0.1 動態連接埠]
-    B --> C[瀏覽器啟動<br/>載入 Pyodide WASM]
-    C --> D{轉換模式選擇}
-    D -->|解析匯入| E[pdfminer.six / BeautifulSoup<br/>markdownify 轉換管線]
-    D -->|編輯匯出| F[pdf-lib + fontkit<br/>思源黑體 OTF 排版]
-    E --> G[產生標準 Markdown 文本]
-    F --> H[輸出雙軌可逆 PDF]
-    H --> I[可視向量頁面 +<br/>/EmbeddedFiles 原始碼]
+    A["本機執行腳本<br>Run-Server.ps1"] --> B[".NET 綁定<br>動態連接埠 (Port)"]
+    B --> C["瀏覽器啟動<br>載入 Pyodide WASM"]
+    C --> D{"轉換模式選擇"}
+    D -->|解析匯入| E["pdfminer / BS4<br>markdownify 管線"]
+    D -->|編輯匯出| F["pdf-lib + fontkit<br>思源黑體向量組版"]
+    E --> G["標準 Markdown 文本"]
+    F --> H["雙軌可逆 PDF"]
+    H --> I["向量頁面 + 附件<br>/EmbeddedFiles"]
 ```
 
 ### 核心規格與技術對照
@@ -90,14 +90,14 @@ It boots via a single PowerShell script utilizing `.NET HttpListener` on an ephe
 
 ```mermaid
 flowchart TD
-    A[Run Script<br/>Run-MarkItDownServer.ps1] --> B[.NET Loopback<br/>127.0.0.1 Dynamic Port]
-    B --> C[Browser Launches<br/>Pyodide WASM Runtime]
-    C --> D{Select Pipeline}
-    D -->|Import & Parse| E[pdfminer.six / BeautifulSoup<br/>markdownify Pipeline]
-    D -->|Edit & Compile| F[pdf-lib + fontkit<br/>Source Han Sans TC OTF]
-    E --> G[Standard Markdown Output]
-    F --> H[Export Reversible PDF]
-    H --> I[Visual Vector Pages +<br/>/EmbeddedFiles source.md]
+    A["Run Script<br>Run-Server.ps1"] --> B[".NET Loopback<br>Dynamic Port"]
+    B --> C["Browser Launches<br>Pyodide WASM Engine"]
+    C --> D{"Select Mode"}
+    D -->|Parse Import| E["pdfminer / BS4<br>markdownify Pipeline"]
+    D -->|Compile Export| F["pdf-lib + fontkit<br>Source Han Sans TC"]
+    E --> G["Standard Markdown"]
+    F --> H["Reversible PDF"]
+    H --> I["Vector Pages +<br>/EmbeddedFiles Attachment"]
 ```
 
 ### Technical Specifications
@@ -159,14 +159,14 @@ Click **Load i18n Pack** to inject an external translation schema without recomp
 
 ```mermaid
 flowchart TD
-    A[スクリプト実行<br/>Run-MarkItDownServer.ps1] --> B[.NET 内部バインド<br/>127.0.0.1 動的ポート]
-    B --> C[ブラウザ自動起動<br/>Pyodide WASM 読込]
-    C --> D{処理分岐選択}
-    D -->|解析・読込| E[pdfminer.six / BeautifulSoup<br/>markdownify 変換基盤]
-    D -->|編集・出力| F[pdf-lib + fontkit<br/>思源黒体 OTF ベクター組版]
-    E --> G[標準 Markdown を抽出]
-    F --> H[可逆 PDF を出力]
-    H --> I[可視ベクター層 +<br/>/EmbeddedFiles 原稿添付]
+    A["スクリプト実行<br>Run-Server.ps1"] --> B[".NET 内部バインド<br>動的ポート確保"]
+    B --> C["ブラウザ起動<br>Pyodide WASM 読込"]
+    C --> D{"処理選択"}
+    D -->|解析読込| E["pdfminer / BS4<br>markdownify 変換基盤"]
+    D -->|編集出力| F["pdf-lib + fontkit<br>思源黒体ベクター組版"]
+    E --> G["標準 Markdown 抽出"]
+    F --> H["可逆 PDF 出力"]
+    H --> I["ベクター層 +<br>/EmbeddedFiles 添付"]
 ```
 
 ### 機能・技術仕様比較
